@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple, Optional
 
 _logger = logging.getLogger(__name__)
 
+
 class LockFile:
 
     def __init__(
@@ -18,6 +19,12 @@ class LockFile:
         self.lock_file = os.path.join(target_dir, lock_file)
         self.models_subdir = models_subdir
         self.target_dir = target_dir
+
+        # Check if the lock file exists, if not, create it with {}
+        if not os.path.exists(self.lock_file):
+            _logger.info("lockfile dosn't exist creating new")
+            with open(self.lock_file, 'w') as file:
+                json.dump({}, file)
 
     def update_filter(self, col_name: str, model_name: str,
                       **kwargs: str) -> None:
@@ -60,11 +67,11 @@ class LockFile:
                      filter_keyword: str = '__filter__') -> Dict[str, str]:
         """
         Search for .sql files in the given directory that contain a specific keyword in their body.
-    
+
         Args:
         directory (str): The path to the directory to search.
         filter_keyword (str): The keyword to search for in the file content.
-    
+
         Returns:
         dict: A dictionary where keys are file paths and values are the content of the files that contain the keyword.
         """
@@ -103,6 +110,7 @@ class LockFile:
         pattern = r"'__filter__\.([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)'\s*=\s*'__filter__\.\1\.\2'"
         replacement = r"{{\1.\2}}"
         matches = set()  # To store unique table.column combinations
+
         def replacement_func(match: re.Match) -> str:
             table_column = f"{match.group(1)}.{match.group(2)}"
             matches.add(table_column)

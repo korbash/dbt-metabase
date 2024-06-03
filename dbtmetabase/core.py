@@ -53,7 +53,7 @@ class DbtMetabase(ModelsMixin, ExposuresMixin, CardsCreator):
             http_adapter (Optional[HTTPAdapter], optional): Custom requests HTTP adapter. Defaults to None.
         """
 
-        self._manifest = Manifest(path=manifest_path, )
+        self._manifest = Manifest(target_dir= target_dir)
         self._metabase = Metabase(
             url=metabase_url,
             api_key=metabase_api_key,

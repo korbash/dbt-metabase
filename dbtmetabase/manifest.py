@@ -33,13 +33,14 @@ _COLUMN_META_FIELDS = _COMMON_META_FIELDS + [
     "has_field_values",
     "coercion_strategy",
     "number_style",
-    "filter",
 ]
 # Must be covered by Model attributes
 _MODEL_META_FIELDS = _COMMON_META_FIELDS + [
     "points_of_interest",
     "caveats",
 ]
+
+_DASH_META_FIELDS = ["filters", "cards_prefix"]
 
 # Default model schema (only schema in BigQuery)
 DEFAULT_SCHEMA = "PUBLIC"
@@ -51,14 +52,28 @@ _CONSTRAINT_FK_PARSER = re.compile(r"(?P<model>.+)\s+\((?P<column>.+)\)")
 class Manifest:
     """dbt manifest reader."""
 
-    def __init__(self, path: Union[str, Path]):
+    def __init__(self, target_dir: Union[str, Path]):
         """Reader for compiled dbt manifest.json file.
 
         Args:
             path (Union[str, Path]): Path to dbt manifest.json (usually under target/).
         """
+        self.target_dir = Path(target_dir).expanduser()
+        self.path = self.target_dir.joinpath('manifest.json')
 
-        self.path = Path(path).expanduser()
+    def read_dashboards(self) -> Sequence[Dashboard]:
+        models = self.read_models()
+
+        with open(self.path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+            
+        dashboards: MutableSequence[Dashboard] = []
+        for dash in manifest["exposures"].values():
+            if dash["type"] != "dashboard":
+                _logger.debug(f"Skipping not dashboard expose {dash['name']}")
+                continue
+            dashboards.append(self._read_dash(dash, models))
+        return dashboards
 
     def read_models(self) -> Sequence[Model]:
         """Reads dbt models in Metabase-friendly format.
@@ -88,10 +103,41 @@ class Manifest:
                 continue
 
             models.append(
-                self._read_model(manifest, node, Group.sources, node["source_name"])
-            )
+                self._read_model(manifest, node, Group.sources,
+                                 node["source_name"]))
 
         return models
+
+    def _read_dash(self, manifest_dash: Mapping, models: Sequence[Model]):
+        cards: Sequence[Model] = []
+        for ref in manifest_dash['refs']:
+            model_name = ref['name']
+            # Find the model with the same name
+            card = next(
+                (model for model in models if model.name == model_name))
+            cards.append(card)
+
+        meta = self._scan_fields(manifest_dash.get("meta", {}),
+                                 fields=_DASH_META_FIELDS,
+                                 ns=_META_NS)
+
+        filters: Sequence[DashFilter] = []
+        for f_name, f_data in meta['filters'].items():
+            f_model, f_col = f_data['column'].split('.')
+            filters.append(
+                DashFilter(name=f_name,
+                           model_name=f_model,
+                           column_name=f_col,
+                           widget_type=f_data['widget_type'],
+                           default=f_data.get('default', None)))
+
+        return Dashboard(
+            name=manifest_dash['name'],
+            description=manifest_dash.get('description', ''),
+            cards_prefix=meta['cards_prefix'],
+            cards=cards,
+            filters=filters,
+        )
 
     def _read_model(
         self,
@@ -107,19 +153,27 @@ class Manifest:
         relationships = self._read_relationships(manifest, group, unique_id)
 
         columns = [
-            self._read_column(column, schema, relationships.get(column["name"]))
+            self._read_column(column, schema,
+                              relationships.get(column["name"]))
             for column in manifest_model.get("columns", {}).values()
         ]
+
+        compile_path = self.target_dir.joinpath(
+            'compiled',
+            manifest_model["package_name"],
+            manifest_model['original_file_path'])
+        with open(compile_path) as f:
+            compile_sql = f.read()
 
         return Model(
             database=database,
             schema=schema,
             group=group,
             name=manifest_model["name"],
-            package_name=manifest_model["package_name"],
+            compile_sql=compile_sql,
             alias=manifest_model.get(
-                "alias", manifest_model.get("identifier", manifest_model["name"])
-            ),
+                "alias",
+                manifest_model.get("identifier", manifest_model["name"])),
             description=manifest_model.get("description"),
             columns=columns,
             unique_id=unique_id,
@@ -169,10 +223,8 @@ class Manifest:
             child = manifest.get(group, {}).get(child_id, {})
             child_name = child.get("alias", child.get("name"))
 
-            if (
-                child.get("resource_type") == "test"
-                and child.get("test_metadata", {}).get("name") == "relationships"
-            ):
+            if (child.get("resource_type") == "test" and child.get(
+                    "test_metadata", {}).get("name") == "relationships"):
                 # To get the name of the foreign table, we could use child[test_metadata][kwargs][to], which
                 # would return the ref() written in the test, but if the model has an alias, that's not enough.
                 # Using child[depends_on][nodes] and excluding the current model is better.
@@ -211,7 +263,8 @@ class Manifest:
 
                 # Skip the incoming relationship tests, in which the fk_target_table is the model currently being read.
                 # Otherwise, the primary key of the current model would be (incorrectly) determined to be FK.
-                if len(depends_on_nodes) == 2 and depends_on_nodes[1] != unique_id:
+                if len(depends_on_nodes
+                       ) == 2 and depends_on_nodes[1] != unique_id:
                     _logger.debug(
                         "Circular dependency '%s' for relationship '%s', skipping",
                         depends_on_nodes[1],
@@ -220,7 +273,8 @@ class Manifest:
                     continue
 
                 # Remove the current model from the list, ensuring it works for self-referencing models.
-                if len(depends_on_nodes) == 2 and unique_id in depends_on_nodes:
+                if len(depends_on_nodes
+                       ) == 2 and unique_id in depends_on_nodes:
                     depends_on_nodes.remove(unique_id)
 
                 if len(depends_on_nodes) != 1:
@@ -236,17 +290,19 @@ class Manifest:
                 fk_target_model = manifest[group].get(depends_on_id, {})
                 fk_target_table = fk_target_model.get(
                     "alias",
-                    fk_target_model.get("identifier", fk_target_model.get("name")),
+                    fk_target_model.get("identifier",
+                                        fk_target_model.get("name")),
                 )
                 if not fk_target_table:
-                    _logger.debug("Cannot resolve dependency for '%s'", depends_on_id)
+                    _logger.debug("Cannot resolve dependency for '%s'",
+                                  depends_on_id)
                     continue
 
                 fk_target_schema = manifest[group][depends_on_id].get(
-                    "schema", DEFAULT_SCHEMA
-                )
+                    "schema", DEFAULT_SCHEMA)
                 fk_target_table = f"{fk_target_schema}.{fk_target_table}"
-                fk_target_field = child["test_metadata"]["kwargs"]["field"].strip('"')
+                fk_target_field = child["test_metadata"]["kwargs"][
+                    "field"].strip('"')
 
                 relationships[child["column_name"]] = {
                     "fk_target_table": fk_target_table,
@@ -293,8 +349,10 @@ class Manifest:
 
         # Precedence 3: Meta fields
         meta = manifest_column.get("meta", {})
-        fk_target_table = meta.get(f"{_META_NS}.fk_target_table", fk_target_table)
-        fk_target_field = meta.get(f"{_META_NS}.fk_target_field", fk_target_field)
+        fk_target_table = meta.get(f"{_META_NS}.fk_target_table",
+                                   fk_target_table)
+        fk_target_field = meta.get(f"{_META_NS}.fk_target_field",
+                                   fk_target_field)
 
         if not fk_target_table or not fk_target_field:
             if fk_target_table or fk_target_table:
@@ -309,7 +367,8 @@ class Manifest:
             fk_target_table_path.insert(0, schema)
 
         column.semantic_type = "type/FK"
-        column.fk_target_table = ".".join([x.strip('"') for x in fk_target_table_path])
+        column.fk_target_table = ".".join(
+            [x.strip('"') for x in fk_target_table_path])
         column.fk_target_field = fk_target_field.strip('"')
         _logger.debug(
             "Relation from '%s' to '%s.%s'",
@@ -358,7 +417,6 @@ class Column:
     fk_target_table: Optional[str] = None
     fk_target_field: Optional[str] = None
 
-    filter: MutableMapping = dc.field(default_factory=dict)
     meta_fields: MutableMapping = dc.field(default_factory=dict)
 
 
@@ -370,7 +428,7 @@ class Model:
 
     name: str
     alias: str
-    package_name: str
+    compile_sql: str
     description: Optional[str] = None
     display_name: Optional[str] = None
     visibility_type: Optional[str] = None
@@ -416,7 +474,24 @@ class Model:
 
         if docs_url:
             sections.append(
-                f"dbt docs: {docs_url.rstrip('/')}/#!/model/{self.unique_id}"
-            )
+                f"dbt docs: {docs_url.rstrip('/')}/#!/model/{self.unique_id}")
 
         return "\n\n".join(sections)
+
+
+@dc.dataclass
+class DashFilter:
+    name: str
+    model_name: str
+    column_name: str
+    widget_type: str
+    default: Optional[str]
+
+
+@dc.dataclass
+class Dashboard:
+    name: str
+    cards_prefix: str
+    description: str
+    cards: Sequence[Model] = dc.field(default_factory=list)
+    filters: Sequence[DashFilter] = dc.field(default_factory=list)

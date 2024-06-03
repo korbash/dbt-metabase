@@ -97,6 +97,7 @@ class CardsCreator(metaclass=ABCMeta):
 
     def __read_filters(self) -> dict:
         filters = self.lock_file.read_filters()
+        _logger.debug(f'filters from lokfile: {filters}')
         tables = self.metabase.get_tables()
         # Iterate through each filter and update it with additional metadata
         for filter in filters.values():

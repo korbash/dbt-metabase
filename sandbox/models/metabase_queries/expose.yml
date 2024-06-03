@@ -1,0 +1,29 @@
+version: 2
+
+exposures:
+  - name: test_dash2
+    # label: "Human-Friendly Name for this Exposure!"
+    description: haha
+    type: dashboard
+    # url: <string>
+    # maturity: {high, medium, low}
+    # tags: [<string>]
+    owner:
+      name: Alexander
+      email: dbtmetabase@example.com
+    
+    depends_on:
+      - ref('test_query')
+    # config:
+    #   enabled: true | false
+    
+    meta:
+     metabase.cards_prefix: metabase_
+     metabase.filters:
+      order_date:
+        column: orders.order_date
+        widget_type: date/all-options
+        default: past7days
+      amount:
+        column: orders.amount
+        widget_type: number/between
