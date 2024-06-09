@@ -66,7 +66,7 @@ class Manifest:
 
         with open(self.path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
-            
+
         dashboards: MutableSequence[Dashboard] = []
         for dash in manifest["exposures"].values():
             if dash["type"] != "dashboard":
@@ -157,11 +157,10 @@ class Manifest:
                               relationships.get(column["name"]))
             for column in manifest_model.get("columns", {}).values()
         ]
-
-        compile_path = self.target_dir.joinpath(
-            'compiled',
-            manifest_model["package_name"],
-            manifest_model['original_file_path'])
+        path = manifest_model['original_file_path']
+        compile_path = self.target_dir.joinpath('compiled',
+                                                manifest_model['package_name'],
+                                                path)
         with open(compile_path) as f:
             compile_sql = f.read()
 
@@ -170,6 +169,7 @@ class Manifest:
             schema=schema,
             group=group,
             name=manifest_model["name"],
+            path=path,
             compile_sql=compile_sql,
             alias=manifest_model.get(
                 "alias",
@@ -428,7 +428,10 @@ class Model:
 
     name: str
     alias: str
+    path: str
     compile_sql: str
+    card_sql: Optional[str] = None
+    card_id: Optional[int] = None
     description: Optional[str] = None
     display_name: Optional[str] = None
     visibility_type: Optional[str] = None
@@ -437,9 +440,10 @@ class Model:
 
     unique_id: Optional[str] = None
     source: Optional[str] = None
-    tags: Optional[Sequence[str]] = dc.field(default_factory=list)
+    tags: list[str] = dc.field(default_factory=list)
 
     columns: Sequence[Column] = dc.field(default_factory=list)
+    filters: list[DashFilter] = dc.field(default_factory=list)
 
     @property
     def ref(self) -> Optional[str]:
@@ -485,7 +489,12 @@ class DashFilter:
     model_name: str
     column_name: str
     widget_type: str
-    default: Optional[str]
+    id: Optional[str] = None
+    default: Optional[str] = None
+    db_id: Optional[str] = None
+    column_id: Optional[int] = None
+    column_effective_type: Optional[str] = None
+    column_base_type: Optional[str] = None
 
 
 @dc.dataclass

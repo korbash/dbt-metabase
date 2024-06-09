@@ -1,6 +1,6 @@
 import logging
 import json
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union, List
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union, List, Literal
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -24,6 +24,7 @@ class Metabase:
         http_timeout: int,
         http_headers: Optional[dict],
         http_adapter: Optional[HTTPAdapter],
+        
     ):
         self.url = url.rstrip("/")
 
@@ -157,6 +158,9 @@ class Metabase:
         results = list(filter(lambda x: x["model"] in models, results))
         return results
 
+    def get_current_user(self) -> Mapping:
+        return self._api('get', '/api/user/current')
+
     def find_card(self, uid: str) -> Optional[Mapping]:
         """Retrieves card (known as question in Metabase UI)."""
         try:
@@ -174,6 +178,12 @@ class Metabase:
                              'models': 'card',
                              'archived': archived
                          })
+
+    def search(self, type=str, archived: bool = False, created_by=None):
+        params = {'models': type, 'archived': archived}
+        if created_by is not None:
+            params['created_by'] = created_by
+        return self._api('get', '/api/search', params=params)
 
     def create_card(self, body: Mapping) -> Mapping:
         headers = {'Content-Type': 'application/json'}
@@ -195,7 +205,7 @@ class Metabase:
         """Formats URL link to a card (known as question in Metabase UI)."""
         return f"{self.url}/card/{uid}"
 
-    def find_dashboard(self, uid: str) -> Optional[Mapping]:
+    def find_dashboard(self, uid: int) -> Optional[Mapping]:
         """Retrieves dashboard."""
         try:
             return dict(self._api("get", f"/api/dashboard/{uid}"))
@@ -205,9 +215,42 @@ class Metabase:
                 return None
             raise
 
+    def create_dashboard(self, name):
+        print(name)
+        headers = {'Content-Type': 'application/json'}
+        return dict(
+            self._api('post',
+                      f'/api/dashboard',
+                      data=json.dumps({'name': name}),
+                      headers=headers))
+
+    def update_dashboard(self, id: int, body: Mapping):
+        headers = {'Content-Type': 'application/json'}
+        return dict(
+            self._api('put',
+                      f'/api/dashboard/{id}',
+                      data=json.dumps(body),
+                      headers=headers))
+
     def format_dashboard_url(self, uid: str) -> str:
         """Formats URL link to a dashboard."""
+
         return f"{self.url}/dashboard/{uid}"
+
+    def create_collection(self,
+                          name: str,
+                          parent_id: Optional[int] = None,
+                          description: Optional[str] = None):
+        headers = {'Content-Type': 'application/json'}
+        body = {
+            'name': name,
+            'parent_id': parent_id,
+            'description': description
+        }
+        return self._api('post',
+                         '/api/collection',
+                         data=json.dumps(body),
+                         headers=headers)
 
     def find_user(self, uid: str) -> Optional[Mapping]:
         """Finds user by ID or returns none."""

@@ -20,10 +20,9 @@ class DbtMetabase(ModelsMixin, ExposuresMixin, CardsCreator):
     """dbt + Metabase integration."""
 
     DEFAULT_HTTP_TIMEOUT = 15
-    DEFAULT_LOCK_FILE_NAME = 'metabase.lock'
 
     def __init__(self,
-                 manifest_path: Union[str, Path],
+                #  manifest_path: Union[str, Path],
                  metabase_url: str,
                  metabase_api_key: Optional[str] = None,
                  metabase_username: Optional[str] = None,
@@ -34,9 +33,7 @@ class DbtMetabase(ModelsMixin, ExposuresMixin, CardsCreator):
                  http_timeout: int = DEFAULT_HTTP_TIMEOUT,
                  http_headers: Optional[dict] = None,
                  http_adapter: Optional[HTTPAdapter] = None,
-                 target_dir: str = '/app/sandbox/target',
-                 lock_file_name: str = DEFAULT_LOCK_FILE_NAME,
-                 cards_subdir: Optional[str] = None):
+                 target_dir: str = '/app/sandbox/target'):
         """dbt + Metabase integration.
 
         Args:
@@ -66,10 +63,6 @@ class DbtMetabase(ModelsMixin, ExposuresMixin, CardsCreator):
             http_headers=http_headers,
             http_adapter=http_adapter,
         )
-        self._lockfile = LockFile(target_dir=target_dir,
-                                  models_subdir=cards_subdir,
-                                  lock_file=lock_file_name)
-
     @property
     def manifest(self) -> Manifest:
         return self._manifest
@@ -77,7 +70,4 @@ class DbtMetabase(ModelsMixin, ExposuresMixin, CardsCreator):
     @property
     def metabase(self) -> Metabase:
         return self._metabase
-
-    @property
-    def lock_file(self) -> LockFile:
-        return self._lockfile
+    
