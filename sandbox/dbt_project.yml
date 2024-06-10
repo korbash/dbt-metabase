@@ -19,3 +19,5 @@ models:
     materialized: table
     staging:
       materialized: view
+    metabase:
+      materialized: ephemeral

@@ -1,0 +1,46 @@
+version: 2
+
+exposures:
+  - name: test_dash4
+    # label: "Human-Friendly Name for this Exposure!"
+    description: haha
+    type: dashboard
+    # url: <string>
+    # maturity: {high, medium, low}
+    # tags: [<string>]
+    owner:
+      name: Alexander
+      email: dbtmetabase@example.com
+
+    depends_on:
+      - ref('metabase_raw_orders')
+      - ref('metabase_total_orders')
+      - ref('metabase_orders_by_days')
+    # config:
+    #   enabled: true | false
+
+    meta:
+      metabase.cards_prefix: metabase_
+      metabase.filters:
+        order_date:
+          column: orders.order_date
+          widget_type: date/all-options
+          default: past7days
+        amount:
+          column: orders.amount
+          widget_type: number/between
+        status:
+          column: orders.status
+          widget_type: string/=
+        reg_date:
+          column: customers.first_order
+          widget_type: date/all-options
+        ltv:
+          column: customers.customer_lifetime_value
+          widget_type: number/between
+      metabase.filters_order:
+        - order_date
+        - status
+        - amount
+        - reg_date
+        - ltv
