@@ -30,7 +30,8 @@
 				"redhat.vscode-yaml",
 				"ms-python.python",
 				"ms-toolsai.jupyter",
-				"eeyore.yapf"
+				"eeyore.yapf",
+				"ms-python.black-formatter"
 			]
 		}
 	}

@@ -9,7 +9,7 @@ from typing import Any, Iterable, Mapping, MutableMapping, Optional, Sequence, T
 
 from .errors import MetabaseStateError
 from .format import Filter, NullValue, safe_name
-from .manifest import DEFAULT_SCHEMA, Column, Group, Manifest, Model, DashFilter, Dashboard
+from .manifest import DEFAULT_SCHEMA, Column, Group, Manifest, Model, DashFilter, Dashboard, Card
 from .metabase import Metabase
 from ._lockfile import LockFile
 
@@ -106,9 +106,8 @@ class CardsCreator(metaclass=ABCMeta):
         for dash in dashboards:
             self.__enrich_filters(dash)
             for card in dash.cards:
-                self.__enrich_card(card, dash.filters, [dash.name, 'dbt'])
                 card.card_id = self.__find(card.name, user_id, type='card')
-                self.__write_card(card)
+                self.__write_card(card, dash.filters)
                 card.card_id = self.__find(card.name, user_id, type='card')
             dash_id = self.__find(dash.name, user_id, type='dashboard')
             if dash_id is None:
@@ -123,11 +122,11 @@ class CardsCreator(metaclass=ABCMeta):
     def __find_collection(self):
         pass
 
-    def __enrich_filters(self, dash: Dashboard) -> Sequence[DashFilter]:
+    def __enrich_filters(self, dash: Dashboard) -> dict[str, DashFilter]:
         filters = dash.filters
         tables = self.metabase.get_tables()
         # Iterate through each filter and update it with additional metadata
-        for filter in filters:
+        for filter in filters.values():
             # Find the table that matches the model_name of the current filter
             table = next(t for t in tables if t['name'] == filter.model_name)
             filter.db_id = table['db_id']
@@ -140,30 +139,15 @@ class CardsCreator(metaclass=ABCMeta):
             filter.column_base_type = column['base_type']
         return filters
 
-    def __enrich_card(self, card: Model, filters: Sequence[DashFilter],
-                      tags: list[str]) -> Model:
-        card_sql = card.compile_sql
-        for f in filters:
-            condition_pattern = re.compile(
-                rf"'__filter__\.{f.name}'\s+is\s+not\s+null", re.MULTILINE)
-            replacement = '{{' + f.name + '}}'
-            if condition_pattern.search(card_sql):
-                card.filters.append(f)
-                card_sql = condition_pattern.sub(replacement, card_sql)
-            card_sql = condition_pattern.sub(replacement, card_sql)
-        card.card_sql = card_sql
-        card.tags += tags
-        return card
-
     def __find(self, name: str, user_id: str,
                type: Literal['card', 'dashboard']) -> Optional[int]:
         dbt_cards = self.metabase.search(type,
                                          created_by=user_id)  # type: ignore
         return next((c['id'] for c in dbt_cards if c['name'] == name), None)
 
-    def __write_card(self, card: Model):
+    def __write_card(self, card: Card, filters: dict[str, DashFilter]):
 
-        def tag(filter: DashFilter, id):
+        def tag(filter: DashFilter, name, id):
             dim = [
                 'field', filter.column_id, {
                     'base-type': filter.column_base_type
@@ -171,35 +155,35 @@ class CardsCreator(metaclass=ABCMeta):
             ]
             template_tag = {
                 'type': 'dimension',
-                'name': filter.name,
+                'name': name,
                 'id': id,  # str(uuid.uuid4())
                 'default': filter.default,
                 'dimension': dim,
                 'widget-type': filter.widget_type,
-                'display-name': get_display_name(filter.name)
+                'display-name': get_display_name(name)
             }
-            return {filter.name: template_tag}
+            return {name: template_tag}
 
-        def param(filter: DashFilter, id):
+        def param(filter: DashFilter, name, id):
             return {
                 'id': id,
                 'type': filter.widget_type,
-                'target': ['dimension', ['template-tag', filter.name]],
-                'slug': filter.name,
-                'name': get_display_name(filter.name)
+                'target': ['dimension', ['template-tag', name]],
+                'slug': name,
+                'name': get_display_name(name)
             }
 
-        db = set(filter.db_id for filter in card.filters)
+        db = set(filters[f].db_id for f in card.filters)
         if len(db) > 1:
             raise ValueError('Multiple databases detected')
         db = db.pop()
 
         tags = {}
         params = []
-        for filter in card.filters:
+        for f in card.filters:
             id = str(uuid.uuid4())
-            tags.update(tag(filter, id))
-            params.append(param(filter, id))
+            tags.update(tag(filters[f], f, id))
+            params.append(param(filters[f], f, id))
         dataset_query = {
             'database': db,
             'type': 'native',
@@ -281,24 +265,25 @@ class CardsCreator(metaclass=ABCMeta):
         dashcards = []
         for i, card in enumerate(dash.cards):
             prm_card = []
-            for filter in card.filters:
-                if filter.name in prm:
-                    id = prm[filter.name]['id']
+            for f in card.filters:
+                filter = dash.filters[f]
+                if f in prm:
+                    id = prm[f]['id']
                 else:
                     id = secrets.token_hex(4)
                     p2 = {
-                        'name': get_display_name(filter.name),
-                        'slug': filter.name,
+                        'name': get_display_name(f),
+                        'slug': f,
                         'id': id,
                         'type': filter.widget_type,
                         'sectionId': filter.widget_type.split('/')[0],
                         'default': filter.default
                     }
-                    prm.update({filter.name: p2})
+                    prm.update({f: p2})
                 p = {
                     'parameter_id': id,
                     'card_id': card.card_id,
-                    'target': ['dimension', ['template-tag', filter.name]]
+                    'target': ['dimension', ['template-tag', f]]
                 }
                 prm_card.append(p)
             size = card_sizes[card.card_id]
@@ -306,19 +291,23 @@ class CardsCreator(metaclass=ABCMeta):
                 'id': i,
                 'card_id': card.card_id,
                 # 'dashboard_tab_id': None,
-                # 'action_id': None,
                 'row': size['row'],
                 'col': size['col'],
                 'size_x': size['size_x'],
                 'size_y': size['size_y'],
-                # 'series': [],
-                # 'visualization_settings': {},
                 'parameter_mappings': prm_card
             }
             dashcards.append(d)
+        if dash.filters_order is None:
+            print('kuku')
+            parameters = list(prm.values())
+        else:
+            parameters = [prm[f] for f in dash.filters_order]
+            print(dash.filters_order)
+            print(parameters)
         data = {
             'dashcards': dashcards,
-            'parameters': list(prm.values()),
+            'parameters': parameters,
             'name': dash.name,
             'description': dash.description,
             'archived': False,
