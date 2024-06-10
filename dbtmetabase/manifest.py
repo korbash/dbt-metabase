@@ -502,8 +502,8 @@ class Card:
     name: str
     path: str
     compile_sql: str
-    card_sql: Optional[str] = None
-    card_id: Optional[int] = None
+    card_sql: str
+    card_id: int = -1
     description: Optional[str] = None
     tags: list[str] = dc.field(default_factory=list)
     filters: set[str] = dc.field(default_factory=set)

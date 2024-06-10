@@ -24,7 +24,6 @@ class Metabase:
         http_timeout: int,
         http_headers: Optional[dict],
         http_adapter: Optional[HTTPAdapter],
-        
     ):
         self.url = url.rstrip("/")
 
@@ -39,8 +38,7 @@ class Metabase:
 
         self.session.mount(
             self.url,
-            http_adapter
-            or HTTPAdapter(max_retries=Retry(total=3, backoff_factor=1)),
+            http_adapter or HTTPAdapter(max_retries=Retry(total=3, backoff_factor=1)),
         )
 
         if api_key:
@@ -50,11 +48,9 @@ class Metabase:
                 self._api(
                     method="post",
                     path="/api/session",
-                    json={
-                        "username": username,
-                        "password": password
-                    },
-                ))
+                    json={"username": username, "password": password},
+                )
+            )
             self.session.headers["X-Metabase-Session"] = str(session["id"])
         elif session_id:
             _logger.warning(
@@ -62,8 +58,7 @@ class Metabase:
             )
             self.session.headers["X-Metabase-Session"] = session_id
         else:
-            raise ArgumentError(
-                "Metabase API key or username/password required")
+            raise ArgumentError("Metabase API key or username/password required")
 
         _logger.info("Metabase session established")
 
@@ -120,15 +115,16 @@ class Metabase:
                 method="get",
                 path=f"/api/database/{uid}/metadata",
                 params={"include_hidden": True},
-            ))
+            )
+        )
 
     def get_tables(self) -> Sequence[Mapping]:
         """Retrieves all tables for all databases."""
         return list(self._api("get", "/api/table"))
 
     def get_columns(self, table_id: str) -> Sequence[Mapping]:
-        response = self._api('get', f'/api/table/{table_id}/query_metadata')
-        return list(dict(response)['fields'])
+        response = self._api("get", f"/api/table/{table_id}/query_metadata")
+        return list(dict(response)["fields"])
 
     def get_collections(self, exclude_personal: bool) -> Sequence[Mapping]:
         """Retrieves all collections and optionally filters out personal collections."""
@@ -137,10 +133,10 @@ class Metabase:
                 method="get",
                 path="/api/collection",
                 params={"exclude-other-user-collections": exclude_personal},
-            ))
+            )
+        )
         if exclude_personal:
-            results = list(
-                filter(lambda x: not x.get("personal_owner_id"), results))
+            results = list(filter(lambda x: not x.get("personal_owner_id"), results))
         return results
 
     def get_collection_items(
@@ -154,12 +150,13 @@ class Metabase:
                 method="get",
                 path=f"/api/collection/{uid}/items",
                 params={"models": models},
-            ))
+            )
+        )
         results = list(filter(lambda x: x["model"] in models, results))
         return results
 
     def get_current_user(self) -> Mapping:
-        return self._api('get', '/api/user/current')
+        return dict(self._api("get", "/api/user/current"))
 
     def find_card(self, uid: str) -> Optional[Mapping]:
         """Retrieves card (known as question in Metabase UI)."""
@@ -172,34 +169,29 @@ class Metabase:
             raise
 
     def all_cards(self, archived=False):
-        return self._api('get',
-                         '/api/search',
-                         params={
-                             'models': 'card',
-                             'archived': archived
-                         })
+        return self._api(
+            "get", "/api/search", params={"models": "card", "archived": archived}
+        )
 
-    def search(self, type=str, archived: bool = False, created_by=None):
-        params = {'models': type, 'archived': archived}
+    def search(
+        self, type:str, archived: bool = False, created_by=None
+    ):
+        params = {"models": type, "archived": archived}
         if created_by is not None:
-            params['created_by'] = created_by
-        return self._api('get', '/api/search', params=params)
+            params["created_by"] = created_by
+        return self._api("get", "/api/search", params=params)
 
     def create_card(self, body: Mapping) -> Mapping:
-        headers = {'Content-Type': 'application/json'}
+        headers = {"Content-Type": "application/json"}
         return dict(
-            self._api('post',
-                      '/api/card',
-                      data=json.dumps(body),
-                      headers=headers))
+            self._api("post", "/api/card", data=json.dumps(body), headers=headers)
+        )
 
     def update_card(self, id: int, body: Mapping) -> Mapping:
-        headers = {'Content-Type': 'application/json'}
+        headers = {"Content-Type": "application/json"}
         return dict(
-            self._api('put',
-                      f'/api/card/{id}',
-                      data=json.dumps(body),
-                      headers=headers))
+            self._api("put", f"/api/card/{id}", data=json.dumps(body), headers=headers)
+        )
 
     def format_card_url(self, uid: str) -> str:
         """Formats URL link to a card (known as question in Metabase UI)."""
@@ -217,40 +209,40 @@ class Metabase:
 
     def create_dashboard(self, name):
         print(name)
-        headers = {'Content-Type': 'application/json'}
+        headers = {"Content-Type": "application/json"}
         return dict(
-            self._api('post',
-                      f'/api/dashboard',
-                      data=json.dumps({'name': name}),
-                      headers=headers))
+            self._api(
+                "post",
+                f"/api/dashboard",
+                data=json.dumps({"name": name}),
+                headers=headers,
+            )
+        )
 
     def update_dashboard(self, id: int, body: Mapping):
-        headers = {'Content-Type': 'application/json'}
+        headers = {"Content-Type": "application/json"}
         return dict(
-            self._api('put',
-                      f'/api/dashboard/{id}',
-                      data=json.dumps(body),
-                      headers=headers))
+            self._api(
+                "put", f"/api/dashboard/{id}", data=json.dumps(body), headers=headers
+            )
+        )
 
     def format_dashboard_url(self, uid: str) -> str:
         """Formats URL link to a dashboard."""
 
         return f"{self.url}/dashboard/{uid}"
 
-    def create_collection(self,
-                          name: str,
-                          parent_id: Optional[int] = None,
-                          description: Optional[str] = None):
-        headers = {'Content-Type': 'application/json'}
-        body = {
-            'name': name,
-            'parent_id': parent_id,
-            'description': description
-        }
-        return self._api('post',
-                         '/api/collection',
-                         data=json.dumps(body),
-                         headers=headers)
+    def create_collection(
+        self,
+        name: str,
+        parent_id: Optional[int] = None,
+        description: Optional[str] = None,
+    ):
+        headers = {"Content-Type": "application/json"}
+        body = {"name": name, "parent_id": parent_id, "description": description}
+        return dict(
+            self._api("post", "/api/collection", data=json.dumps(body), headers=headers)
+        )
 
     def find_user(self, uid: str) -> Optional[Mapping]:
         """Finds user by ID or returns none."""
@@ -268,8 +260,7 @@ class Metabase:
 
     def update_table_field_order(self, uid: str, body: Sequence) -> Sequence:
         """Posts update to field order of an existing table."""
-        return list(
-            self._api("put", f"/api/table/{uid}/fields/order", json=body))
+        return list(self._api("put", f"/api/table/{uid}/fields/order", json=body))
 
     def update_field(self, uid: str, body: Mapping) -> Mapping:
         """Posts an update to an existing table field."""
