@@ -20,20 +20,23 @@ class DbtMetabase(ModelsMixin, ExposuresMixin, CardsCreator):
     """dbt + Metabase integration."""
 
     DEFAULT_HTTP_TIMEOUT = 15
+    TARGET_DIR = "target"
 
-    def __init__(self,
-                #  manifest_path: Union[str, Path],
-                 metabase_url: str,
-                 metabase_api_key: Optional[str] = None,
-                 metabase_username: Optional[str] = None,
-                 metabase_password: Optional[str] = None,
-                 metabase_session_id: Optional[str] = None,
-                 skip_verify: bool = False,
-                 cert: Optional[Union[str, Tuple[str, str]]] = None,
-                 http_timeout: int = DEFAULT_HTTP_TIMEOUT,
-                 http_headers: Optional[dict] = None,
-                 http_adapter: Optional[HTTPAdapter] = None,
-                 target_dir: str = '/app/sandbox/target'):
+    def __init__(
+        self,
+        #  manifest_path: Union[str, Path],
+        metabase_url: str,
+        metabase_api_key: Optional[str] = None,
+        metabase_username: Optional[str] = None,
+        metabase_password: Optional[str] = None,
+        metabase_session_id: Optional[str] = None,
+        skip_verify: bool = False,
+        cert: Optional[Union[str, Tuple[str, str]]] = None,
+        http_timeout: int = DEFAULT_HTTP_TIMEOUT,
+        http_headers: Optional[dict] = None,
+        http_adapter: Optional[HTTPAdapter] = None,
+        target_dir: str = TARGET_DIR,
+    ):
         """dbt + Metabase integration.
 
         Args:
@@ -50,7 +53,7 @@ class DbtMetabase(ModelsMixin, ExposuresMixin, CardsCreator):
             http_adapter (Optional[HTTPAdapter], optional): Custom requests HTTP adapter. Defaults to None.
         """
 
-        self._manifest = Manifest(target_dir= target_dir)
+        self._manifest = Manifest(target_dir=target_dir)
         self._metabase = Metabase(
             url=metabase_url,
             api_key=metabase_api_key,
@@ -63,6 +66,7 @@ class DbtMetabase(ModelsMixin, ExposuresMixin, CardsCreator):
             http_headers=http_headers,
             http_adapter=http_adapter,
         )
+
     @property
     def manifest(self) -> Manifest:
         return self._manifest
@@ -70,4 +74,3 @@ class DbtMetabase(ModelsMixin, ExposuresMixin, CardsCreator):
     @property
     def metabase(self) -> Metabase:
         return self._metabase
-    

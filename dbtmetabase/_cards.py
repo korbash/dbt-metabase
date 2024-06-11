@@ -42,7 +42,6 @@ from typing import List, Dict, Any
 
 from typing import Dict, Any
 
-COLLECTION = "dbt_cards"
 # MODELS_PREFIX = "metabase_"
 
 
@@ -114,6 +113,8 @@ def get_display_name(name: str):
 
 
 class CardsCreator(metaclass=ABCMeta):
+    COLLECTION = "dbt_cards"
+    MODELS_PREFIX = ""
 
     @property
     @abstractmethod
@@ -125,7 +126,9 @@ class CardsCreator(metaclass=ABCMeta):
     def metabase(self) -> Metabase:
         pass
 
-    def update_cards(self, collection: str = COLLECTION, models_prefix: str = ""):
+    def update_dash(
+        self, collection: str = COLLECTION, models_prefix: str = MODELS_PREFIX
+    ):
         user_id = self.metabase.get_current_user()["id"]
         dashboards = self.manifest.read_dashboards()
         dbt_clt = self.__create_collection(collection)
