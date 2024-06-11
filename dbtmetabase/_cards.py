@@ -141,12 +141,10 @@ class CardsCreator(metaclass=ABCMeta):
                 self.__write_card(card, dash.filters, dash_clt)
                 card.card_id = self.__find(card.name, user_id, type="card")
             dash_id = self.__find(dash.name, user_id, type="dashboard")
-            if dash_id is None:
+            if dash_id == -1:
                 self.metabase.create_dashboard(dash.name)
                 dash_id = self.__find(dash.name, user_id, type="dashboard")
                 _logger.debug(f"created new dash {dash_id} name {dash.name}")
-                if dash_id is None:
-                    raise (ValueError("dash_id is none"))
             card_sizes = self.__get_card_sizes(dash_id)
             if len(dash.tabs) == 0:
                 dash.tabs = {"main": list(dash.cards.keys())}
