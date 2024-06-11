@@ -417,7 +417,7 @@ def exposures(
     help="prefix that will be removed from dbt model name before publish to metabase",
 )
 def dash(collection: str, models_prefix: str, core: DbtMetabase):
-    core.update_dash(collection=collection, models_prefix=models_prefix)
+    core.update_dashbords(collection=collection, models_prefix=models_prefix)
 
 
 if __name__ == "__main__":

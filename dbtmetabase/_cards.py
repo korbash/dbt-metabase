@@ -5,19 +5,7 @@ import re
 import uuid
 import secrets
 from abc import ABCMeta, abstractmethod
-from typing import (
-    Any,
-    Iterable,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Dict,
-    List,
-    Literal,
-    Iterator,
-)
+from typing import Any, Optional, Iterator, Literal
 
 from .errors import MetabaseStateError
 from .format import Filter, NullValue, safe_name
@@ -32,20 +20,10 @@ from .manifest import (
     Card,
 )
 from .metabase import Metabase
-from ._lockfile import LockFile
 
 _logger = logging.getLogger(__name__)
 
-from typing import List, Dict, Any
-
-from typing import List, Dict, Any
-
-from typing import Dict, Any
-
-# MODELS_PREFIX = "metabase_"
-
-
-def _simulate_reverse_gravity(rectangles: Dict[int, Dict[str, Any]], min_row: int = 0):
+def _simulate_reverse_gravity(rectangles: dict[int, dict[str, Any]], min_row: int = 0):
     """
     Simulate reverse gravity on a dictionary of rectangles.
 
@@ -89,7 +67,7 @@ def _simulate_reverse_gravity(rectangles: Dict[int, Dict[str, Any]], min_row: in
 
 def _generate_rectangles(
     min_row: int = 0, size_y: int = 6, columns: int = 2
-) -> Iterator[Dict[str, Any]]:
+) -> Iterator[dict[str, Any]]:
     size_x = 24 // columns
     column = 0
     row = min_row
@@ -126,7 +104,7 @@ class CardsCreator(metaclass=ABCMeta):
     def metabase(self) -> Metabase:
         pass
 
-    def update_dash(
+    def update_dashbords(
         self, collection: str = COLLECTION, models_prefix: str = MODELS_PREFIX
     ):
         user_id = self.metabase.get_current_user()["id"]
@@ -260,7 +238,6 @@ class CardsCreator(metaclass=ABCMeta):
             _logger.debug(f"creating new card name {card.name}")
             data = {
                 "name": card.name,
-                "cache_ttl": None,
                 "dataset": False,
                 "type": "question",
                 "dataset_query": dataset_query,
@@ -271,11 +248,8 @@ class CardsCreator(metaclass=ABCMeta):
                 "parameter_mappings": [],
                 "archived": False,
                 "enable_embedding": False,
-                "embedding_params": None,
                 "collection_id": collection,
-                "collection_position": None,
                 "collection_preview": True,
-                "result_metadata": None,
             }
             return self.metabase.create_card(data)
 

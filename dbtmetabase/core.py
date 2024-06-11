@@ -11,7 +11,6 @@ from ._models import ModelsMixin
 from ._cards import CardsCreator
 from .manifest import Manifest
 from .metabase import Metabase
-from ._lockfile import LockFile
 
 _logger = logging.getLogger(__name__)
 

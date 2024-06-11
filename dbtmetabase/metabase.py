@@ -1,6 +1,6 @@
 import logging
 import json
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union, List, Literal
+from typing import Any, Optional, Union
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -20,7 +20,7 @@ class Metabase:
         password: Optional[str],
         session_id: Optional[str],
         skip_verify: bool,
-        cert: Optional[Union[str, Tuple[str, str]]],
+        cert: Optional[Union[str, tuple[str, str]]],
         http_timeout: int,
         http_headers: Optional[dict],
         http_adapter: Optional[HTTPAdapter],
@@ -66,9 +66,9 @@ class Metabase:
         self,
         method: str,
         path: str,
-        params: Optional[Dict[str, Any]] = None,
+        params: Optional[dict[str, Any]] = None,
         **kwargs,
-    ) -> Union[Mapping, Sequence]:
+    ) -> Union[dict, list]:
         """Raw API call."""
 
         if params:
@@ -97,7 +97,7 @@ class Metabase:
 
         return response_json
 
-    def find_database(self, name: str) -> Optional[Mapping]:
+    def find_database(self, name: str) -> Optional[dict]:
         """Finds database by name attribute or returns none."""
         for api_database in list(self._api("get", "/api/database")):
             if api_database["name"].upper() == name.upper():
@@ -108,7 +108,7 @@ class Metabase:
         """Triggers schema sync on a database."""
         self._api("post", f"/api/database/{uid}/sync_schema")
 
-    def get_database_metadata(self, uid: str) -> Mapping:
+    def get_database_metadata(self, uid: str) -> dict:
         """Retrieves metadata for all tables and fields in a database, including hidden ones."""
         return dict(
             self._api(
@@ -118,15 +118,15 @@ class Metabase:
             )
         )
 
-    def get_tables(self) -> Sequence[Mapping]:
+    def get_tables(self) -> list[dict]:
         """Retrieves all tables for all databases."""
         return list(self._api("get", "/api/table"))
 
-    def get_columns(self, table_id: str) -> Sequence[Mapping]:
+    def get_columns(self, table_id: str) -> list[dict]:
         response = self._api("get", f"/api/table/{table_id}/query_metadata")
         return list(dict(response)["fields"])
 
-    def get_collections(self, exclude_personal: bool) -> Sequence[Mapping]:
+    def get_collections(self, exclude_personal: bool) -> list[dict]:
         """Retrieves all collections and optionally filters out personal collections."""
         results = list(
             self._api(
@@ -142,8 +142,8 @@ class Metabase:
     def get_collection_items(
         self,
         uid: str,
-        models: Sequence[str],
-    ) -> Sequence[Mapping]:
+        models: list[str],
+    ) -> list[dict]:
         """Retrieves collection items of specific types (e.g. card, dashboard, collection)."""
         results = list(
             self._api(
@@ -155,10 +155,10 @@ class Metabase:
         results = list(filter(lambda x: x["model"] in models, results))
         return results
 
-    def get_current_user(self) -> Mapping:
+    def get_current_user(self) -> dict:
         return dict(self._api("get", "/api/user/current"))
 
-    def find_card(self, uid: str) -> Optional[Mapping]:
+    def find_card(self, uid: str) -> Optional[dict]:
         """Retrieves card (known as question in Metabase UI)."""
         try:
             return dict(self._api("get", f"/api/card/{uid}"))
@@ -168,26 +168,26 @@ class Metabase:
                 return None
             raise
 
-    def all_cards(self, archived=False):
+    def all_cards(self, archived: bool = False):
         return self._api(
             "get", "/api/search", params={"models": "card", "archived": archived}
         )
 
     def search(
-        self, type:str, archived: bool = False, created_by=None
+        self, type: str, archived: bool = False, created_by=None
     ):
         params = {"models": type, "archived": archived}
         if created_by is not None:
             params["created_by"] = created_by
         return self._api("get", "/api/search", params=params)
 
-    def create_card(self, body: Mapping) -> Mapping:
+    def create_card(self, body: dict) -> dict:
         headers = {"Content-Type": "application/json"}
         return dict(
             self._api("post", "/api/card", data=json.dumps(body), headers=headers)
         )
 
-    def update_card(self, id: int, body: Mapping) -> Mapping:
+    def update_card(self, id: int, body: dict) -> dict:
         headers = {"Content-Type": "application/json"}
         return dict(
             self._api("put", f"/api/card/{id}", data=json.dumps(body), headers=headers)
@@ -197,11 +197,10 @@ class Metabase:
         """Formats URL link to a card (known as question in Metabase UI)."""
         return f"{self.url}/card/{uid}"
 
-    def find_dashboard(self, uid: int) -> Mapping:
+    def find_dashboard(self, uid: int) -> dict:
         return dict(self._api("get", f"/api/dashboard/{uid}"))
 
-    def create_dashboard(self, name):
-        print(name)
+    def create_dashboard(self, name: str):
         headers = {"Content-Type": "application/json"}
         return dict(
             self._api(
@@ -212,7 +211,7 @@ class Metabase:
             )
         )
 
-    def update_dashboard(self, id: int, body: Mapping):
+    def update_dashboard(self, id: int, body: dict):
         headers = {"Content-Type": "application/json"}
         return dict(
             self._api(
@@ -222,7 +221,6 @@ class Metabase:
 
     def format_dashboard_url(self, uid: str) -> str:
         """Formats URL link to a dashboard."""
-
         return f"{self.url}/dashboard/{uid}"
 
     def create_collection(
@@ -237,7 +235,7 @@ class Metabase:
             self._api("post", "/api/collection", data=json.dumps(body), headers=headers)
         )
 
-    def find_user(self, uid: str) -> Optional[Mapping]:
+    def find_user(self, uid: str) -> Optional[dict]:
         """Finds user by ID or returns none."""
         try:
             return dict(self._api("get", f"/api/user/{uid}"))
@@ -247,14 +245,14 @@ class Metabase:
                 return None
             raise
 
-    def update_table(self, uid: str, body: Mapping) -> Mapping:
+    def update_table(self, uid: str, body: dict) -> dict:
         """Posts update to an existing table."""
         return dict(self._api("put", f"/api/table/{uid}", json=body))
 
-    def update_table_field_order(self, uid: str, body: Sequence) -> Sequence:
+    def update_table_field_order(self, uid: str, body: list) -> list:
         """Posts update to field order of an existing table."""
         return list(self._api("put", f"/api/table/{uid}/fields/order", json=body))
 
-    def update_field(self, uid: str, body: Mapping) -> Mapping:
+    def update_field(self, uid: str, body: dict) -> dict:
         """Posts an update to an existing table field."""
         return dict(self._api("put", f"/api/field/{uid}", json=body))

@@ -6,15 +6,7 @@ import logging
 import re
 from enum import Enum
 from pathlib import Path
-from typing import (
-    Iterable,
-    Mapping,
-    MutableMapping,
-    MutableSequence,
-    Optional,
-    Sequence,
-    Union,
-)
+from typing import Optional, Union, Iterable
 from .format import NullValue
 
 _logger = logging.getLogger(__name__)
@@ -81,7 +73,7 @@ class Manifest:
         self.target_dir = Path(target_dir).expanduser()
         self.path = self.target_dir.joinpath("manifest.json")
 
-    def read_dashboards(self) -> Sequence[Dashboard]:
+    def read_dashboards(self) -> list[Dashboard]:
         with open(self.path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
 
@@ -93,17 +85,17 @@ class Manifest:
             dashboards.append(self._read_dash(dash, manifest))
         return dashboards
 
-    def read_models(self) -> Sequence[Model]:
+    def read_models(self) -> list[Model]:
         """Reads dbt models in Metabase-friendly format.
 
         Returns:
-            Sequence[Model]: List of dbt models in Metabase-friendly format.
+            list[Model]: List of dbt models in Metabase-friendly format.
         """
 
         with open(self.path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
 
-        models: MutableSequence[Model] = []
+        models: list[Model] = []
 
         for node in manifest["nodes"].values():
             if node["resource_type"] != "model":
@@ -126,7 +118,7 @@ class Manifest:
 
         return models
 
-    def _read_dash(self, manifest_dash: Mapping, manifest: Mapping):
+    def _read_dash(self, manifest_dash: dict, manifest: dict):
         cards = {}
         for node_name in manifest_dash["depends_on"]["nodes"]:
             card = self._read_card(manifest["nodes"][node_name])
@@ -175,8 +167,8 @@ class Manifest:
 
     def _read_model(
         self,
-        manifest: Mapping,
-        manifest_model: Mapping,
+        manifest: dict,
+        manifest_model: dict,
         group: Group,
         source: Optional[str] = None,
     ) -> Model:
@@ -213,9 +205,9 @@ class Manifest:
 
     def _read_column(
         self,
-        manifest_column: Mapping,
+        manifest_column: dict,
         schema: str,
-        relationship: Optional[Mapping],
+        relationship: Optional[dict],
     ) -> Column:
         column = Column(
             name=manifest_column.get("name", ""),
@@ -238,10 +230,10 @@ class Manifest:
 
     def _read_relationships(
         self,
-        manifest: Mapping,
+        manifest: dict,
         group: Group,
         unique_id: str,
-    ) -> Mapping[str, Mapping[str, str]]:
+    ) -> dict[str, dict[str, str]]:
         relationships = {}
 
         for child_id in manifest["child_map"][unique_id]:
@@ -336,10 +328,10 @@ class Manifest:
 
     def _set_column_relationship(
         self,
-        manifest_column: Mapping,
+        manifest_column: dict,
         column: Column,
         schema: str,
-        relationship: Optional[Mapping],
+        relationship: Optional[dict],
     ):
         """Sets primary key and foreign key target on a column from constraints, meta fields or provided test relationship."""
 
@@ -398,16 +390,16 @@ class Manifest:
         )
 
     @staticmethod
-    def _scan_fields(t: Mapping, fields: Iterable[str], ns: str) -> dict:
+    def _scan_fields(t: dict, fields: Iterable[str], ns: str) -> dict:
         """Reads meta fields from a schem object.
 
         Args:
-            t (Mapping): Target to scan for fields.
-            fields (List): List of fields to accept.
+            t (dict): Target to scan for fields.
+            fields (list): List of fields to accept.
             ns (str): Field namespace (separated by .).
 
         Returns:
-            Mapping: Field values.
+            dict: Field values.
         """
 
         vals = {}
@@ -437,7 +429,7 @@ class Column:
     fk_target_table: Optional[str] = None
     fk_target_field: Optional[str] = None
 
-    meta_fields: MutableMapping = dc.field(default_factory=dict)
+    meta_fields: dict = dc.field(default_factory=dict)
 
 
 @dc.dataclass
@@ -456,9 +448,9 @@ class Model:
 
     unique_id: Optional[str] = None
     source: Optional[str] = None
-    tags: Optional[Sequence[str]] = dc.field(default_factory=list)
+    tags: list[str] = dc.field(default_factory=list)
 
-    columns: Sequence[Column] = dc.field(default_factory=list)
+    columns: list[Column] = dc.field(default_factory=list)
 
     @property
     def ref(self) -> Optional[str]:
