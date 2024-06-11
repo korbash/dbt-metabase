@@ -197,15 +197,8 @@ class Metabase:
         """Formats URL link to a card (known as question in Metabase UI)."""
         return f"{self.url}/card/{uid}"
 
-    def find_dashboard(self, uid: int) -> Optional[Mapping]:
-        """Retrieves dashboard."""
-        try:
-            return dict(self._api("get", f"/api/dashboard/{uid}"))
-        except requests.exceptions.HTTPError as error:
-            if error.response.status_code == 404:
-                _logger.warning("Dashboard '%s' not found", uid)
-                return None
-            raise
+    def find_dashboard(self, uid: int) -> Mapping:
+        return dict(self._api("get", f"/api/dashboard/{uid}"))
 
     def create_dashboard(self, name):
         print(name)

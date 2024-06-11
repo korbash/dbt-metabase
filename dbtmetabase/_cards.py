@@ -125,16 +125,14 @@ class CardsCreator(metaclass=ABCMeta):
     def metabase(self) -> Metabase:
         pass
 
-    def update_cards(
-        self, collection: str = COLLECTION, models_prefix: str = ''
-    ):
+    def update_cards(self, collection: str = COLLECTION, models_prefix: str = ""):
         user_id = self.metabase.get_current_user()["id"]
         dashboards = self.manifest.read_dashboards()
         dbt_clt = self.__create_collection(collection)
         for dash in dashboards:
             dash_clt = self.__create_collection(dash.name, dbt_clt)
             self.__enrich_filters(dash)
-            for card in dash.cards:
+            for card in dash.cards.values():
                 card.name = card.name.removeprefix(models_prefix)
                 card.card_id = self.__find(card.name, user_id, type="card")
                 self.__write_card(card, dash.filters, dash_clt)
@@ -147,6 +145,10 @@ class CardsCreator(metaclass=ABCMeta):
                 if dash_id is None:
                     raise (ValueError("dash_id is none"))
             card_sizes = self.__get_card_sizes(dash_id)
+            if len(dash.tabs) == 0:
+                dash.tabs = {"main": list(dash.cards.keys())}
+            if len(dash.tabs_order) == 0:
+                dash.tabs_order = list(dash.tabs.keys())
             new_card_sizes = self.__generate_card_sizes(dash, card_sizes)
             self.__write_dash(dash, dash_id, new_card_sizes)
 
@@ -278,7 +280,7 @@ class CardsCreator(metaclass=ABCMeta):
 
     def __get_card_sizes(self, dash_id: int):
         dash = self.metabase.find_dashboard(dash_id)
-        keys = ["size_x", "size_y", "row", "col"]
+        keys = ["size_x", "size_y", "row", "col", "dashboard_tab_id"]
         card_sizes = {}
         for card in dash["dashcards"]:
             if "card_id" in card:
@@ -287,69 +289,80 @@ class CardsCreator(metaclass=ABCMeta):
                 card_sizes[id] = c
         return card_sizes
 
-    def __generate_card_sizes(self, dash: Dashboard, card_sizes):
-        ids = [card.card_id for card in dash.cards]
-        exist_sizes = {key: card_sizes[key] for key in ids if key in card_sizes}
-        _logger.debug(f"exist_rectangels: {exist_sizes}")
-        modify_exist = _simulate_reverse_gravity(exist_sizes)
-        _logger.debug(f"modified_rectangels: {modify_exist}")
-        if len(modify_exist) > 0:
-            max_row = max(
-                rect["row"] + rect["size_y"] for rect in modify_exist.values()
+    def __generate_card_sizes(self, dash: Dashboard, card_sizes: dict):
+        resut_sizes = {}
+        for tab, tab_name in enumerate(dash.tabs_order):
+            ids = [dash.cards[c].card_id for c in dash.tabs[tab_name]]
+            sizes_id = set(
+                k for k, v in card_sizes.items() if v["dashboard_tab_id"] == tab
             )
-        else:
-            max_row = 0
-        grid_iterator = _generate_rectangles(min_row=max_row)
-        new_sizes = {key: next(grid_iterator) for key in ids if key not in card_sizes}
-        _logger.debug(f"new_rectangels: {new_sizes}")
-        modify_exist.update(new_sizes)
-        return modify_exist
+            exist_sizes = {key: card_sizes[key] for key in ids if key in sizes_id}
+            _logger.debug(f"exist_rectangels: {exist_sizes} for tab {tab} ({tab_name})")
+            modify_exist = _simulate_reverse_gravity(exist_sizes)
+            _logger.debug(f"modified_rectan: {modify_exist} for tab {tab} ({tab_name})")
+            if len(modify_exist) > 0:
+                max_row = max(
+                    rect["row"] + rect["size_y"] for rect in modify_exist.values()
+                )
+            else:
+                max_row = 0
+            grid_iterator = _generate_rectangles(min_row=max_row)
+            new_sizes = {
+                key: next(grid_iterator) for key in ids if key not in exist_sizes
+            }
+            _logger.debug(f"new_rectangels: {new_sizes} for tab {tab} ({tab_name})")
+            resut_sizes.update(modify_exist)
+            resut_sizes.update(new_sizes)
+        return resut_sizes
 
     def __write_dash(self, dash: Dashboard, dash_id: int, card_sizes):
         prm = {}
         dashcards = []
-        for i, card in enumerate(dash.cards):
-            prm_card = []
-            for f in card.filters:
-                filter = dash.filters[f]
-                if f in prm:
-                    id = prm[f]["id"]
-                else:
-                    id = secrets.token_hex(4)
-                    p2 = {
-                        "name": get_display_name(f),
-                        "slug": f,
-                        "id": id,
-                        "type": filter.widget_type,
-                        "sectionId": filter.widget_type.split("/")[0],
-                        "default": filter.default,
+        tabs = []
+        i = 0
+        for tab, tab_name in enumerate(dash.tabs_order):
+            tabs.append({"id": tab, "name": tab_name})
+            for card_name in dash.tabs[tab_name]:
+                card = dash.cards[card_name]
+                prm_card = []
+                for f in card.filters:
+                    filter = dash.filters[f]
+                    if f in prm:
+                        id = prm[f]["id"]
+                    else:
+                        id = secrets.token_hex(4)
+                        p2 = {
+                            "name": get_display_name(f),
+                            "slug": f,
+                            "id": id,
+                            "type": filter.widget_type,
+                            "sectionId": filter.widget_type.split("/")[0],
+                            "default": filter.default,
+                        }
+                        prm.update({f: p2})
+                    p = {
+                        "parameter_id": id,
+                        "card_id": card.card_id,
+                        "target": ["dimension", ["template-tag", f]],
                     }
-                    prm.update({f: p2})
-                p = {
-                    "parameter_id": id,
+                    prm_card.append(p)
+                size = card_sizes[card.card_id]
+                d = {
+                    "id": i,
                     "card_id": card.card_id,
-                    "target": ["dimension", ["template-tag", f]],
+                    "dashboard_tab_id": tab,
+                    "row": size["row"],
+                    "col": size["col"],
+                    "size_x": size["size_x"],
+                    "size_y": size["size_y"],
+                    "parameter_mappings": prm_card,
                 }
-                prm_card.append(p)
-            size = card_sizes[card.card_id]
-            d = {
-                "id": i,
-                "card_id": card.card_id,
-                # 'dashboard_tab_id': None,
-                "row": size["row"],
-                "col": size["col"],
-                "size_x": size["size_x"],
-                "size_y": size["size_y"],
-                "parameter_mappings": prm_card,
-            }
-            dashcards.append(d)
+                dashcards.append(d)
+                i += 1
         if dash.filters_order is None:
-            print("kuku")
             parameters = list(prm.values())
         else:
             parameters = [prm[f] for f in dash.filters_order]
-            print(dash.filters_order)
-            print(parameters)
         data = {
             "dashcards": dashcards,
             "parameters": parameters,
@@ -357,7 +370,7 @@ class CardsCreator(metaclass=ABCMeta):
             "description": dash.description,
             "archived": False,
             "can_write": True,
-            "tabs": [],
+            "tabs": tabs,
             # 'enable_embedding': False,
             # 'collection_id': None,
             # 'show_in_getting_started': False,

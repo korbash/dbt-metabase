@@ -39,7 +39,7 @@ _MODEL_META_FIELDS = _COMMON_META_FIELDS + [
     "caveats",
 ]
 
-_DASH_META_FIELDS = ["filters", "filters_order"]
+_DASH_META_FIELDS = ["filters", "filters_order", "tabs", "tabs_order"]
 
 # Default model schema (only schema in BigQuery)
 DEFAULT_SCHEMA = "PUBLIC"
@@ -127,16 +127,18 @@ class Manifest:
         return models
 
     def _read_dash(self, manifest_dash: Mapping, manifest: Mapping):
-        cards = []
+        cards = {}
         for node_name in manifest_dash["depends_on"]["nodes"]:
-            cards.append(self._read_card(manifest["nodes"][node_name]))
+            card = self._read_card(manifest["nodes"][node_name])
+            cards.update({card.name: card})
 
         meta = self._scan_fields(
             manifest_dash.get("meta", {}), fields=_DASH_META_FIELDS, ns=_META_NS
         )
 
         filters = {}
-        for f_name, f_data in meta["filters"].items():
+        filters_json = meta.pop("filters")
+        for f_name, f_data in filters_json.items():
             f_model, f_col = f_data["column"].split(".")
             filters[f_name] = DashFilter(
                 model_name=f_model,
@@ -150,7 +152,7 @@ class Manifest:
             description=manifest_dash.get('description'),
             cards=cards,
             filters=filters,
-            filters_order=meta.get('filters_order')
+            **meta
         )
 
     def _read_card(self, manifest_model) -> Card:
@@ -396,7 +398,7 @@ class Manifest:
         )
 
     @staticmethod
-    def _scan_fields(t: Mapping, fields: Iterable[str], ns: str) -> Mapping:
+    def _scan_fields(t: Mapping, fields: Iterable[str], ns: str) -> dict:
         """Reads meta fields from a schem object.
 
         Args:
@@ -526,6 +528,8 @@ class DashFilter:
 class Dashboard:
     name: str
     description: Optional[str] = None
-    cards: Sequence[Card] = dc.field(default_factory=list)
+    cards: dict[str, Card] = dc.field(default_factory=dict)
     filters: dict[str, DashFilter] = dc.field(default_factory=dict)
     filters_order: Optional[list[str]] = None
+    tabs: dict[str, list] = dc.field(default_factory=dict)
+    tabs_order: list[str] = dc.field(default_factory=list)

@@ -44,3 +44,10 @@ exposures:
         - amount
         - reg_date
         - ltv
+      metabase.tabs:
+        summery:
+          - metabase_total_orders
+          - metabase_orders_by_days
+        row:
+          - metabase_raw_orders
+      metabase.tabs_order: [summery, row]
