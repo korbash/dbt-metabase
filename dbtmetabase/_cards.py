@@ -1,7 +1,4 @@
-import dataclasses as dc
 import logging
-import time
-import re
 import uuid
 import secrets
 from abc import ABCMeta, abstractmethod
@@ -9,19 +6,11 @@ from typing import Any, Optional, Iterator, Literal
 
 from .errors import MetabaseStateError
 from .format import Filter, NullValue, safe_name
-from .manifest import (
-    DEFAULT_SCHEMA,
-    Column,
-    Group,
-    Manifest,
-    Model,
-    DashFilter,
-    Dashboard,
-    Card,
-)
+from .manifest import Manifest, DashFilter, Dashboard, Card
 from .metabase import Metabase
 
 _logger = logging.getLogger(__name__)
+
 
 def _simulate_reverse_gravity(rectangles: dict[int, dict[str, Any]], min_row: int = 0):
     """
@@ -111,9 +100,11 @@ class CardsCreator(metaclass=ABCMeta):
         dashboards = self.manifest.read_dashboards()
         dbt_clt = self.__create_collection(collection)
         for dash in dashboards:
+            _logger.debug(f"Processing dashboard {dash.name}")
             dash_clt = self.__create_collection(dash.name, dbt_clt)
             self.__enrich_filters(dash)
             for card in dash.cards.values():
+                _logger.debug(f"Processing card {card.name}")
                 card.name = card.name.removeprefix(models_prefix)
                 card.card_id = self.__find(card.name, user_id, type="card")
                 self.__write_card(card, dash.filters, dash_clt)
@@ -122,7 +113,7 @@ class CardsCreator(metaclass=ABCMeta):
             if dash_id == -1:
                 self.metabase.create_dashboard(dash.name)
                 dash_id = self.__find(dash.name, user_id, type="dashboard")
-                _logger.debug(f"created new dash {dash_id} name {dash.name}")
+                _logger.debug(f"Created new dashboard {dash_id} name {dash.name}")
             card_sizes = self.__get_card_sizes(dash_id)
             if len(dash.tabs) == 0:
                 dash.tabs = {"main": list(dash.cards.keys())}
@@ -159,24 +150,48 @@ class CardsCreator(metaclass=ABCMeta):
     def __enrich_filters(self, dash: Dashboard) -> dict[str, DashFilter]:
         filters = dash.filters
         tables = self.metabase.get_tables()
-        # Iterate through each filter and update it with additional metadata
-        for filter in filters.values():
-            # Find the table that matches the model_name of the current filter
-            table = next(t for t in tables if t["name"] == filter.model_name)
-            filter.db_id = table["db_id"]
-            columns = self.metabase.get_columns(table["id"])
-            column = next(c for c in columns if c["name"] == filter.column_name)
 
+        # Debug logs with concise, relevant information
+        _logger.debug(f"Dashboard '{dash.name}' contains {len(filters)} filters.")
+        _logger.debug(f"Found the following tables in Metabase: {[t['name'] for t in tables]}")
+        # Enrich filters with additional metadata
+        for fname, filter in filters.items():
+            _logger.debug(f"Enriching filter {fname} on model '{filter.model_name}' and column '{filter.column_name}'")
+            # Locate the table that corresponds to the model name of the filter
+            try:
+                table = next(t for t in tables if t["name"] == filter.model_name)
+            except StopIteration:
+                _logger.error(f"Table with name '{filter.model_name}' not found")
+                continue
+
+            filter.db_id = table["db_id"]
+
+            try:
+                columns = self.metabase.get_columns(table["id"])
+                column = next(c for c in columns if c["name"] == filter.column_name)
+            except StopIteration:
+                _logger.error(f"Column with name '{filter.column_name}' not found in table '{filter.model_name}'")
+                continue
+
+            # Enrich filter attributes
             filter.column_id = column["id"]
             filter.column_effective_type = column["effective_type"]
             filter.column_base_type = column["base_type"]
+
+            _logger.debug(
+                f"Updated filter {fname}: model '{filter.model_name}', column name {filter.column_name} column ID '{filter.column_id}'"
+            )
+
         return filters
 
     def __find(
         self, name: str, user_id: str, type: Literal["card", "dashboard"]
     ) -> int:
         dbt_cards = self.metabase.search(type, created_by=user_id)  # type: ignore
-        return next((c["id"] for c in dbt_cards if c["name"] == name), -1)
+        _logger.debug(f"Finding {type} with name {name} created by user {user_id}")
+        found_id = next((c["id"] for c in dbt_cards if c["name"] == name), -1)
+        _logger.debug(f"Found {type} id: {found_id}")
+        return found_id
 
     def __write_card(
         self,
@@ -255,6 +270,7 @@ class CardsCreator(metaclass=ABCMeta):
 
     def __get_card_sizes(self, dash_id: int):
         dash = self.metabase.find_dashboard(dash_id)
+        _logger.debug(f"Dashboard found with top-level fields: {list(dash.keys())}")
         keys = ["size_x", "size_y", "row", "col", "dashboard_tab_id"]
         card_sizes = {}
         for card in dash["dashcards"]:
@@ -352,6 +368,7 @@ class CardsCreator(metaclass=ABCMeta):
             # 'width': 'fixed',
             # 'auto_apply_filters': True,
         }
-        _logger.debug(f"updating dash {dash_id} name {dash.name}")
-        _logger.debug(data)
+
+        # Log top-level structure of data for debugging purposes
+        _logger.debug(f"Updating dashboard {dash_id} with name: {dash.name}; top-level fields: {list(data.keys())}")
         return self.metabase.update_dashboard(dash_id, data)
