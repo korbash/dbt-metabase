@@ -118,13 +118,27 @@ class Metabase:
             )
         )
 
-    def get_tables(self) -> list[dict]:
+    def get_tables(self, lower=True) -> list[dict]:
         """Retrieves all tables for all databases."""
-        return list(self._api("get", "/api/table"))
+        tables = list(self._api("get", "/api/table"))
+        if lower:
+            for t in tables:
+                t["name"] = t["name"].lower()
+        _logger.debug(
+            f"Found the following tables in Metabase: {[t['name'] for t in tables]}"
+        )
+        return tables
 
-    def get_columns(self, table_id: str) -> list[dict]:
+    def get_columns(self, table_id: str, lower=True) -> list[dict]:
         response = self._api("get", f"/api/table/{table_id}/query_metadata")
-        return list(dict(response)["fields"])
+        columns = list(dict(response)["fields"])
+        if lower:
+            for c in columns:
+                c["name"] = c["name"].lower()
+        _logger.debug(
+            f"Found columns: {[c['name'] for c in columns]}"
+        )
+        return columns
 
     def get_collections(self, exclude_personal: bool) -> list[dict]:
         """Retrieves all collections and optionally filters out personal collections."""
@@ -173,9 +187,7 @@ class Metabase:
             "get", "/api/search", params={"models": "card", "archived": archived}
         )
 
-    def search(
-        self, type: str, archived: bool = False, created_by=None
-    ):
+    def search(self, type: str, archived: bool = False, created_by=None):
         params = {"models": type, "archived": archived}
         if created_by is not None:
             params["created_by"] = created_by

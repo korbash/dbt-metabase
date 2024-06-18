@@ -127,16 +127,15 @@ class Manifest:
         meta = self._scan_fields(
             manifest_dash.get("meta", {}), fields=_DASH_META_FIELDS, ns=_META_NS
         )
-
         filters = {}
         filters_json = meta.pop("filters")
         for f_name, f_data in filters_json.items():
             f_model, f_col = f_data["column"].split(".")
             filters[f_name] = DashFilter(
-                model_name=f_model,
-                column_name=f_col,
-                widget_type=f_data["widget_type"],
-                default=f_data.get("default"),
+                model_name=f_model.lower(),
+                column_name=f_col.lower(),
+                widget_type=f_data["widget_type"].lower(),
+                default=f_data.get("default").lower(),
             )
 
         return Dashboard(

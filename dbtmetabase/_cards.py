@@ -153,7 +153,6 @@ class CardsCreator(metaclass=ABCMeta):
 
         # Debug logs with concise, relevant information
         _logger.debug(f"Dashboard '{dash.name}' contains {len(filters)} filters.")
-        _logger.debug(f"Found the following tables in Metabase: {[t['name'] for t in tables]}")
         # Enrich filters with additional metadata
         for fname, filter in filters.items():
             _logger.debug(f"Enriching filter {fname} on model '{filter.model_name}' and column '{filter.column_name}'")
