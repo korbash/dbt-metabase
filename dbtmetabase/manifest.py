@@ -134,8 +134,8 @@ class Manifest:
             filters[f_name] = DashFilter(
                 model_name=f_model.lower(),
                 column_name=f_col.lower(),
-                widget_type=f_data["widget_type"].lower(),
-                default=f_data.get("default").lower(),
+                widget_type=f_data["widget_type"],
+                default=f_data.get("default"),
             )
 
         return Dashboard(
